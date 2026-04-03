@@ -6,7 +6,7 @@
   "scripts": {
     "dev:vite": "vite --host 0.0.0.0",
     "dev:api": "tsx watch src/api/server.ts",
-    "dev:migrations": "npx dotenv-flow -- prisma migrate dev --name auto",
+    "dev:migrations": "node scripts/migrate.mjs",
     "dev:serve": "npx run-p dev:vite dev:api",
     "dev": "npx run-s dev:migrations dev:serve",
     "dev:types": "tsc --noEmit",
@@ -98,7 +98,6 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
-    "dotenv-flow": "^4.1.0",
     "dts-bundle-generator": "^9.5.1",
     "npm-run-all2": "^8.0.4",
     "eslint": "^9.30.1",
