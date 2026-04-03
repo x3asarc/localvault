@@ -42,7 +42,16 @@ const { procedures, jobs } = await import("@/api");
 
 const app = new Hono();
 if (honoMiddleware) {
+  // Adaptive platform: full middleware (auth, queue status, logger, RPC)
   app.use(honoMiddleware({ procedures, jobs, transcoder }));
+} else {
+  // Local mode: minimal JSON-RPC handler via typed-rpc
+  const { handleRpc } = await import("typed-rpc/server");
+  app.post("/api/*", async (c) => {
+    const body = await c.req.json();
+    const result = await handleRpc(body, procedures, { transcoder });
+    return c.json(result);
+  });
 }
 
 serve({
