@@ -576,7 +576,9 @@ export async function ingestInboxFile(data: { filename: string; content: string 
 // Admin / Maintenance
 // ──────────────────────────────────────────────
 
-export async function cleanupDuplicates() {
+// Not exported — run manually via RPC when needed (admin-only maintenance task).
+// Keep unexported so it doesn't appear in the public procedure surface.
+export async function adminCleanupDuplicates() {
   const userId = await requireUserId();
 
   // Find all articles for this user

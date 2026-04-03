@@ -44,6 +44,7 @@ export function Library({ onArticleProcessed }: LibraryProps) {
           queryClient.invalidateQueries({ queryKey: ["tags"] });
           onArticleProcessed();
         }}
+        onNavigateToArticle={(id) => setSelectedArticleId(id)}
       />
     );
   }

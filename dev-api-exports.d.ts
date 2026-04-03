@@ -128,7 +128,7 @@ export declare function ingestInboxFile(data: {
 	title: string;
 	duplicate?: undefined;
 }>;
-export declare function cleanupDuplicates(): Promise<{
+export declare function adminCleanupDuplicates(): Promise<{
 	deleted: number;
 	message: string;
 }>;

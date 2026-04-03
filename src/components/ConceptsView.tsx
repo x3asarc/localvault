@@ -36,6 +36,7 @@ export function ConceptsView({ onArticleProcessed }: ConceptsViewProps) {
           setSelectedArticleId(null);
           onArticleProcessed?.();
         }}
+        onNavigateToArticle={(id) => setSelectedArticleId(id)}
       />
     );
   }
@@ -43,9 +44,14 @@ export function ConceptsView({ onArticleProcessed }: ConceptsViewProps) {
   // ── Concept drill-down view ─────────────────────────────
   if (selectedConceptId) {
     const concept = concepts?.find((c) => c.id === selectedConceptId);
+    // If concept data hasn't loaded yet, show a spinner rather than
+    // calling a state setter during render (which is illegal in React).
     if (!concept) {
-      setSelectedConceptId(null);
-      return null;
+      return (
+        <div className="flex items-center justify-center h-48 text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin" />
+        </div>
+      );
     }
 
     const conceptArticles = (concept.articleIds as string[])
@@ -85,9 +91,12 @@ export function ConceptsView({ onArticleProcessed }: ConceptsViewProps) {
 
             {/* Articles list */}
             {conceptArticles.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No articles found for this concept.
-              </p>
+              <div className="text-center py-8 space-y-1">
+                <p className="text-sm text-muted-foreground">No indexed articles in this concept yet.</p>
+                <p className="text-xs text-muted-foreground/60">
+                  Articles appear here once AI processing completes.
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {conceptArticles.map((article) => (

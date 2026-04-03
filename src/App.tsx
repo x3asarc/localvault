@@ -90,6 +90,7 @@ function App() {
               setGraphSelectedId(null);
               invalidateAll();
             }}
+            onNavigateToArticle={(id) => setGraphSelectedId(id)}
           />
         ) : activeTab === "graph" ? (
           <GraphView onNodeClick={(id) => setGraphSelectedId(id)} />

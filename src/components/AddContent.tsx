@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,14 @@ export function AddContent({ onAdded }: AddContentProps) {
   const [content, setContent] = useState("");
   const [justAdded, setJustAdded] = useState(false);
   const [wasDuplicate, setWasDuplicate] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cancel any pending timer when component unmounts
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const addMutation = useMutation({
     mutationFn: () =>
@@ -72,12 +80,12 @@ export function AddContent({ onAdded }: AddContentProps) {
         setTitle("");
         setUrl("");
         setContent("");
-        setTimeout(() => {
+        timerRef.current = setTimeout(() => {
           setJustAdded(false);
           onAdded();
         }, 1200);
       } else {
-        setTimeout(() => {
+        timerRef.current = setTimeout(() => {
           setJustAdded(false);
           setWasDuplicate(false);
         }, 3000);

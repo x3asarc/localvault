@@ -11,6 +11,7 @@ interface ArticleDetailProps {
   articleId: string;
   onBack: () => void;
   onDeleted: () => void;
+  onNavigateToArticle?: (id: string) => void;
 }
 
 function AIStatusRow({ status }: { status: string }) {
@@ -29,7 +30,7 @@ function AIStatusRow({ status }: { status: string }) {
   );
 }
 
-export function ArticleDetail({ articleId, onBack, onDeleted }: ArticleDetailProps) {
+export function ArticleDetail({ articleId, onBack, onDeleted, onNavigateToArticle }: ArticleDetailProps) {
   const { data: article, isLoading } = useQuery({
     queryKey: ["article", articleId],
     queryFn: () => client.getArticle(articleId),
@@ -160,8 +161,20 @@ export function ArticleDetail({ articleId, onBack, onDeleted }: ArticleDetailPro
             </h3>
             <div className="space-y-3">
               {(article.connections as Array<{id: string; reason: string; strength: number; article: {id: string; title: string; summary: string | null}}>).map((conn) => (
-                <div key={conn.id} className="bg-muted/50 rounded-lg p-3 space-y-1.5">
-                  <p className="text-sm font-medium line-clamp-1">{conn.article.title}</p>
+                <div
+                  key={conn.id}
+                  className={cn(
+                    "bg-muted/50 rounded-lg p-3 space-y-1.5",
+                    onNavigateToArticle && "cursor-pointer hover:bg-muted/80 transition-colors"
+                  )}
+                  onClick={() => onNavigateToArticle?.(conn.article.id)}
+                >
+                  <p className="text-sm font-medium line-clamp-1">
+                    {conn.article.title}
+                    {onNavigateToArticle && (
+                      <span className="text-[10px] text-primary ml-1.5">→</span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground leading-relaxed">{conn.reason}</p>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-1 bg-border rounded-full overflow-hidden">

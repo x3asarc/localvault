@@ -237,15 +237,16 @@ export function GraphView({ onNodeClick }: { onNodeClick: (id: string) => void }
           y: event.clientY - rect.top,
           node: d,
         });
+        // selectAll("circle") highlights both rings on concept nodes
         d3.select(event.currentTarget as SVGGElement)
-          .select("circle")
+          .selectAll("circle")
           .attr("stroke-width", 3)
           .attr("stroke-opacity", 1);
       })
       .on("mouseleave", (event: MouseEvent, d: GraphNode) => {
         setTooltip(null);
         d3.select(event.currentTarget as SVGGElement)
-          .select("circle")
+          .selectAll("circle")
           .attr("stroke-width", d.kind === "concept" ? 2 : 1.5)
           .attr("stroke-opacity", d.kind === "concept" ? 0.8 : 0.5);
       })
@@ -257,13 +258,13 @@ export function GraphView({ onNodeClick }: { onNodeClick: (id: string) => void }
     const simulation = d3.forceSimulation<GraphNode>(allNodes)
       .force("link", d3.forceLink<GraphNode, Edge>(allEdges)
         .id((d) => d.id)
-        .distance((d) => {
+        .distance((d: Edge) => {
           if (d.kind === "concept-link") return 120;
-          return 80 + (1 - (d as Edge).strength) * 60;
+          return 80 + (1 - d.strength) * 60;
         })
-        .strength((d) => {
+        .strength((d: Edge) => {
           if (d.kind === "concept-link") return 0.05;
-          return (d as Edge).strength * 0.4;
+          return d.strength * 0.4;
         })
       )
       .force("charge", d3.forceManyBody<GraphNode>().strength((d) => d.kind === "concept" ? -200 : -120))
