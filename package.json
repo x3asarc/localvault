@@ -9,6 +9,7 @@
     "dev:migrations": "dotenv-flow -- prisma migrate dev --name auto",
     "dev:serve": "run-p dev:vite dev:api",
     "dev": "run-s dev:migrations dev:serve",
+    "dev:types": "tsc --noEmit",
     "check": "run-p check:types",
     "check:types": "tsc --noEmit",
     "lint": "eslint .",
