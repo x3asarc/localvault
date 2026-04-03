@@ -6,7 +6,7 @@
   "scripts": {
     "dev:vite": "vite --host 0.0.0.0",
     "dev:api": "tsx watch src/api/server.ts",
-    "dev:migrations": "dotenv-flow -- prisma migrate dev --name auto",
+    "dev:migrations": "npx dotenv-flow -- prisma migrate dev --name auto",
     "dev:serve": "npx run-p dev:vite dev:api",
     "dev": "npx run-s dev:migrations dev:serve",
     "dev:types": "tsc --noEmit",
