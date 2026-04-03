@@ -2,8 +2,6 @@
 
 A local-first, AI-powered personal knowledge base. Add articles, notes, tweets, and transcripts — the AI summarizes, tags, and connects them into a searchable graph. Runs entirely on your machine. Your data, your keys, your vault.
 
-**Live demo:** [knowledge-base-x3automationservices93511598.adaptive.ai](https://knowledge-base-x3automationservices93511598.adaptive.ai)
-
 ---
 
 ## Quick start

@@ -290,9 +290,9 @@ export function SettingsPage() {
             href="https://github.com/x3asarc/localvault"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-primary flex items-center gap-1 hover:underline"
+            className="text-xs text-primary flex items-center gap-1 hover:underline mt-1"
           >
-            View source on GitHub <ExternalLink className="w-3 h-3" />
+            github.com/x3asarc/localvault <ExternalLink className="w-3 h-3" />
           </a>
         </div>
 

@@ -33,6 +33,30 @@ async function requireUserId(): Promise<string> {
   return auth.userId;
 }
 
+/**
+ * Demo mode: purge all data for a user that was last active more than 2 hours ago.
+ * Called at the start of each session to keep the hosted demo stateless.
+ * Only runs when DEMO_MODE=true in env.
+ */
+async function maybePurgeStaleDemoData(userId: string) {
+  if (process.env.DEMO_MODE !== "true") return;
+
+  const latest = await db.article.findFirst({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    select: { updatedAt: true },
+  });
+
+  // If last activity > 2 hours ago (or no data), wipe everything for fresh demo
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  if (!latest || latest.updatedAt < twoHoursAgo) {
+    await db.article.deleteMany({ where: { userId } });
+    await db.concept.deleteMany({ where: { userId } });
+    await db.savedQuery.deleteMany({ where: { userId } });
+    await db.aISettings.deleteMany({ where: { userId } });
+  }
+}
+
 export async function health() {
   return {
     status: "ok",
@@ -536,14 +560,13 @@ export async function exportObsidianVault() {
     "",
     "# Inbox",
     "",
-    "Drop `.md` files here. The knowledge base app will automatically detect them and run the full AI pipeline.",
+    "Drop `.md` files here. LocalVault watches this folder automatically when running locally.",
     "",
     "## How to use",
     "",
     "1. Create a `.md` file with your content",
-    "2. Put it in this `inbox/` folder",
-    "3. Open the Knowledge Base app and click **Upload from Inbox**",
-    "4. The AI will summarize, tag, and connect it to your existing library",
+    "2. Drop it here — the app picks it up automatically (local mode)",
+    "3. Or use the **Sync** tab in the app to upload manually",
     "",
     "## Template",
     "",
@@ -551,6 +574,68 @@ export async function exportObsidianVault() {
     "# Your Title Here",
     "",
     "Paste your content here...",
+    "```",
+  ].join("\n");
+
+  // ── Bootstrap: SETUP.md — getting started locally ────────────────────────
+  files["SETUP.md"] = [
+    "# Run LocalVault Locally",
+    "",
+    "This vault was exported from [LocalVault](https://github.com/x3asarc/localvault).",
+    "Your articles, concepts, and Q&A are preserved as markdown files above.",
+    "",
+    "To continue using the full AI-powered app on your own machine:",
+    "",
+    "## 1. Clone & install",
+    "",
+    "```bash",
+    "git clone https://github.com/x3asarc/localvault",
+    "cd localvault",
+    "npm install",
+    "```",
+    "",
+    "## 2. Configure",
+    "",
+    "```bash",
+    "cp .env.example .env",
+    "```",
+    "",
+    "Open `.env` and set your AI provider key:",
+    "",
+    "```env",
+    "AI_PROVIDER=anthropic",
+    "ANTHROPIC_API_KEY=sk-ant-...",
+    "```",
+    "",
+    "Supported providers: `anthropic` · `openai` · `google` · `mistral` · `groq` · `openrouter` · `ollama`",
+    "",
+    "## 3. Point at this vault (optional)",
+    "",
+    "To enable auto-ingest when you drop files in `inbox/`:",
+    "",
+    "```env",
+    "VAULT_PATH=/path/to/this/folder",
+    "```",
+    "",
+    "## 4. Run",
+    "",
+    "```bash",
+    "npm run dev",
+    "# → http://localhost:3000",
+    "```",
+    "",
+    "Your existing data will be in the markdown files here.",
+    "Re-add articles via the app to rebuild the AI index (summaries, connections, graph).",
+    "",
+    "## 5. Use with any LLM CLI tool",
+    "",
+    "Open this folder in Claude Code, Cursor, or any LLM-powered editor.",
+    "The `AGENTS.md` file in the repo root gives any agent full context about the system.",
+    "",
+    "```bash",
+    "cd /path/to/this/vault",
+    "claude  # or: cursor .",
+    "# Agent reads AGENTS.md → immediately understands the system",
     "```",
   ].join("\n");
 
@@ -744,6 +829,9 @@ export async function adminCleanupDuplicates() {
 
 export async function getLibraryStats() {
   const userId = await requireUserId();
+
+  // Purge stale data in demo mode (no-op when DEMO_MODE != "true")
+  await maybePurgeStaleDemoData(userId);
 
   const [totalArticles, processedArticles, totalTags, totalConcepts, totalQueries] =
     await Promise.all([
