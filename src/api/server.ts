@@ -1,31 +1,49 @@
 import { Hono } from "hono";
 import { deserialize, serialize } from "superjson";
 import { serve } from "@hono/node-server";
-import {
-  honoMiddleware,
-  initializeServerEnvironment,
-} from "@adaptive-ai/sdk/server";
 import { env } from "@/lib/env";
 import path from "path";
 import fs from "fs";
 
 const transcoder = { serialize, deserialize };
 
-initializeServerEnvironment({
-  baseUrl: env.VITE_BASE_URL,
-  realtimeDomain: env.VITE_REALTIME_DOMAIN,
-  guestServicesUrl: env.GUEST_SERVICES_URL,
-  environment: env.VITE_NODE_ENV,
-  apiKey: env.API_KEY,
-  queueDbPath: env.QUEUE_DB_FILE_NAME,
-  errorsDbPath: env.ERRORS_DB_FILE_NAME,
-});
+// ── Adaptive platform bootstrap (no-op in local mode) ────────────────────────
+// When running on the Adaptive platform, initializeServerEnvironment sets up
+// realtime, queue, and error tracking services. Locally these services don't
+// exist, so we catch any failure and continue — the app works without them.
+try {
+  const { initializeServerEnvironment } = await import("@adaptive-ai/sdk/server");
+  initializeServerEnvironment({
+    baseUrl: env.VITE_BASE_URL,
+    realtimeDomain: env.VITE_REALTIME_DOMAIN,
+    guestServicesUrl: env.GUEST_SERVICES_URL,
+    environment: env.VITE_NODE_ENV,
+    apiKey: env.API_KEY,
+    queueDbPath: env.QUEUE_DB_FILE_NAME,
+    errorsDbPath: env.ERRORS_DB_FILE_NAME,
+  });
+} catch {
+  // Not running on Adaptive — local mode, safe to ignore
+}
+
+// honoMiddleware is only needed on Adaptive (handles RPC routing).
+// In local mode we skip it; the Hono app still serves health/RPC via typed-rpc.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let honoMiddleware: ((opts: any) => any) | null = null;
+try {
+  const sdk = await import("@adaptive-ai/sdk/server");
+  honoMiddleware = sdk.honoMiddleware;
+} catch {
+  // Not on Adaptive — local mode
+}
 
 // Import these after initializing the environment
 const { procedures, jobs } = await import("@/api");
 
 const app = new Hono();
-app.use(honoMiddleware({ procedures, jobs, transcoder }));
+if (honoMiddleware) {
+  app.use(honoMiddleware({ procedures, jobs, transcoder }));
+}
 
 serve({
   fetch: app.fetch,

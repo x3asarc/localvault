@@ -4,28 +4,17 @@
   "version": "1.12.0",
   "type": "module",
   "scripts": {
-    "dev:vite": "vite --host 0.0.0.0 2>&1 | tee -a vite-dev.log",
-    "dev:api": "tsx watch --include \"src/api/procedures.ts\" src/api/server.ts 2>&1 | tee -a api-dev.log",
-    "dev:migrations": "dotenv -e .env.development -- prisma migrate dev --name auto 2>&1 | tee -a api-dev.log",
+    "dev:vite": "vite --host 0.0.0.0",
+    "dev:api": "tsx watch src/api/server.ts",
+    "dev:migrations": "dotenv-flow -- prisma migrate dev --name auto",
     "dev:serve": "run-p dev:vite dev:api",
-    "dev:free-ports": "for p in $PORT $((PORT+1)); do lsof -ti :$p | xargs -r kill -9 2>/dev/null; done; true",
-    "dev:types": "dts-bundle-generator --out-file=dev-api-exports.d.ts --no-check --project tsconfig.json --external-inlines @babel/types -- src/api/procedures.ts",
-    "dev": "dotenv -e .env.development -- run-s dev:free-ports dev:migrations dev:serve",
-    "check": "run-p check:types check:config",
+    "dev": "run-s dev:migrations dev:serve",
+    "check": "run-p check:types",
     "check:types": "tsc --noEmit",
-    "check:config": "tsx app.config.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "postinstall": "prisma generate",
-    "prod:build:vite": "vite build && vite build --config vite.config.api.ts",
-    "prod:build:types": "dts-bundle-generator --out-file=dist/api-exports.d.ts --no-check --project tsconfig.json --external-inlines @babel/types -- src/api/procedures.ts",
-    "prod:build": "dotenv -e .env.production -- run-p prod:migrations prod:build:types prod:build:vite",
-    "prod:migrations": "dotenv -e .env.production -- prisma migrate deploy 2>&1 | tee -a api-prod.log",
-    "prod:free-ports": "for p in $PORT $((PORT+1)); do lsof -ti :$p | xargs -r kill -9 2>/dev/null; done; true",
-    "prod:vite": "vite preview --host 0.0.0.0 2>&1 | tee -a vite-prod.log",
-    "prod:api": "nodemon dist/api/server.js 2>&1 | tee -a api-prod.log",
-    "prod": "dotenv -e .env.production -- run-s prod:free-ports && dotenv -e .env.production -- run-p prod:vite prod:api"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@adaptive-ai/sdk": "0.1.37",
@@ -101,13 +90,9 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.11",
     "vaul": "^1.1.2",
-    "zod": "^4.0.5"
+    "zod": "^3.25.0"
   },
-  "peerDependencies": {
-    "@trpc/client": "^10.11.0",
-    "@trpc/server": "^10.11.0",
-    "openai": "~4.42.0"
-  },
+
   "devDependencies": {
     "@eslint/js": "^9.30.1",
     "@types/better-sqlite3": "^7.6.13",
@@ -115,7 +100,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
-    "dotenv-cli": "^11.0.0",
+    "dotenv-flow": "^4.1.0",
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^9.30.1",
     "eslint-plugin-react-hooks": "^5.2.0",

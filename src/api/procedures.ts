@@ -1,6 +1,5 @@
 import { db } from "@/api/db";
 import { env } from "@/lib/env";
-import { getAuth } from "@adaptive-ai/sdk/server";
 import { queue } from "@/api/queue";
 import { nanoid } from "nanoid";
 import { createHash } from "crypto";
@@ -28,9 +27,31 @@ function normalizeTitle(title: string): string {
 }
 
 async function requireUserId(): Promise<string> {
-  const auth = await getAuth({ required: true });
-  if (!auth.userId) throw new Error("Not authenticated");
-  return auth.userId;
+  // Local single-user mode: use LOCAL_USER_ID env var, defaulting to "local-user".
+  // This lets the app run without any auth infrastructure.
+  const localUserId = process.env.LOCAL_USER_ID;
+  if (localUserId || process.env.VITE_APP_ID === "local") {
+    const userId = localUserId ?? "local-user";
+    // Auto-create the user row on first access so all FK constraints are satisfied
+    await db.user.upsert({
+      where: { id: userId },
+      create: { id: userId },
+      update: {},
+    });
+    return userId;
+  }
+
+  // Adaptive platform mode: use the SDK auth context
+  try {
+    const { getAuth } = await import("@adaptive-ai/sdk/server");
+    const auth = await getAuth({ required: true });
+    if (!auth.userId) throw new Error("Not authenticated");
+    return auth.userId;
+  } catch (err: unknown) {
+    // If the SDK itself throws (not an auth error), re-throw as auth error
+    if (err instanceof Error && err.message === "Not authenticated") throw err;
+    throw new Error("Not authenticated");
+  }
 }
 
 /**
