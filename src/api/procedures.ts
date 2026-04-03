@@ -5,10 +5,25 @@ import { queue } from "@/api/queue";
 import { nanoid } from "nanoid";
 import { createHash } from "crypto";
 
+/** Strip markdown links [text](url) → text, collapse whitespace, lowercase */
+function normalizeContent(content: string): string {
+  return content
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // [text](url) → text
+    .replace(/https?:\/\/\S+/g, "")           // bare URLs
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function contentHash(userId: string, content: string): string {
   return createHash("sha256")
-    .update(userId + "|" + content.trim())
+    .update(userId + "|" + normalizeContent(content))
     .digest("hex");
+}
+
+/** Normalized title: lowercase, strip punctuation, collapse whitespace */
+function normalizeTitle(title: string): string {
+  return title.toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
 async function requireUserId(): Promise<string> {
@@ -40,11 +55,19 @@ export async function addArticle(data: {
 }) {
   const userId = await requireUserId();
 
-  // Deduplication guard — reject if identical content already exists for this user
+  // Deduplication guard 1 — exact content match (normalized: strips markdown links/URLs)
   const hash = contentHash(userId, data.content);
-  const existing = await db.article.findFirst({ where: { userId, contentHash: hash } });
-  if (existing) {
-    return { ...existing, duplicate: true };
+  const existingByHash = await db.article.findFirst({ where: { userId, contentHash: hash } });
+  if (existingByHash) {
+    return { ...existingByHash, duplicate: true };
+  }
+
+  // Deduplication guard 2 — same normalized title already exists
+  const titleNorm = normalizeTitle(data.title.trim() || data.content.slice(0, 80));
+  const allTitles = await db.article.findMany({ where: { userId }, select: { id: true, title: true } });
+  const existingByTitle = allTitles.find((a) => normalizeTitle(a.title) === titleNorm);
+  if (existingByTitle) {
+    return { ...existingByTitle, duplicate: true };
   }
 
   const article = await db.article.create({
@@ -585,19 +608,26 @@ export async function adminCleanupDuplicates() {
   const articles = await db.article.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" }, // keep oldest
-    select: { id: true, content: true, createdAt: true },
+    select: { id: true, title: true, content: true, createdAt: true },
   });
 
-  // Group by content hash
-  const seen = new Map<string, string>(); // hash -> first article id
+  // Group by normalized content hash (strips markdown links so near-dupes are caught)
+  // Also group by normalized title as a second axis
+  const seenContent = new Map<string, string>(); // hash -> first article id
+  const seenTitle = new Map<string, string>();    // normalized title -> first article id
   const toDelete: string[] = [];
 
   for (const article of articles) {
     const hash = contentHash(userId, article.content);
-    if (seen.has(hash)) {
+    const titleKey = normalizeTitle(article.title);
+
+    if (seenContent.has(hash)) {
+      toDelete.push(article.id);
+    } else if (seenTitle.has(titleKey)) {
       toDelete.push(article.id);
     } else {
-      seen.set(hash, article.id);
+      seenContent.set(hash, article.id);
+      seenTitle.set(titleKey, article.id);
     }
   }
 

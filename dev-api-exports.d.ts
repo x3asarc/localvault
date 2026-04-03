@@ -42,6 +42,10 @@ export declare function addArticle(data: {
 	aiJobId: number | null;
 	createdAt: Date;
 	updatedAt: Date;
+} | {
+	duplicate: boolean;
+	id: string;
+	title: string;
 }>;
 export declare function getArticles(filter?: {
 	tag?: string;
