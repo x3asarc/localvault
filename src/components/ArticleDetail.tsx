@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ function AIStatusRow({ status }: { status: string }) {
 }
 
 export function ArticleDetail({ articleId, onBack, onDeleted, onNavigateToArticle }: ArticleDetailProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const { data: article, isLoading } = useQuery({
     queryKey: ["article", articleId],
     queryFn: () => client.getArticle(articleId),
@@ -79,19 +81,38 @@ export function ArticleDetail({ articleId, onBack, onDeleted, onNavigateToArticl
             </Button>
           </a>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => deleteMutation.mutate()}
-          disabled={deleteMutation.isPending}
-          className="shrink-0 text-destructive hover:text-destructive"
-        >
-          {deleteMutation.isPending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
+        {confirmDelete ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded transition-colors"
+            >
+              Cancel
+            </button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setConfirmDelete(true)}
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+          >
             <Trash2 className="w-4 h-4" />
-          )}
-        </Button>
+          </Button>
+        )}
       </div>
 
       {/* Content */}
@@ -143,11 +164,11 @@ export function ArticleDetail({ articleId, onBack, onDeleted, onNavigateToArticl
               Tags
             </h3>
             <div className="flex gap-1.5 flex-wrap">
-          {(article.tags as string[]).map((tag) => (
-              <Badge key={tag} variant="outline" className="text-xs">
-                {tag}
-              </Badge>
-            ))}
+              {(article.tags as string[]).map((tag) => (
+                <Badge key={tag} variant="outline" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
             </div>
           </div>
         )}

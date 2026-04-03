@@ -19,7 +19,7 @@ export function ConceptsView({ onArticleProcessed }: ConceptsViewProps) {
   });
 
   const { data: articles } = useQuery({
-    queryKey: ["articles", {}],
+    queryKey: ["articles"],
     queryFn: () => client.getArticles(),
   });
 

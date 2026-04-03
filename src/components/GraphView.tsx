@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import * as d3 from "d3";
-import { Loader2, ZoomIn, ZoomOut, Maximize2, Info, Layers } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, Maximize2, Info, Layers, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ArticleNode extends d3.SimulationNodeDatum {
@@ -52,6 +52,59 @@ const STATUS_OPACITY: Record<string, number> = {
   pending: 0.4,
   failed: 0.3,
 };
+
+function LegendPanel({
+  nodes,
+  edges,
+  showConcepts,
+}: {
+  nodes: number;
+  edges: number;
+  showConcepts: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="absolute bottom-4 left-3">
+      <div className="bg-card/90 backdrop-blur border border-border rounded-lg shadow-md overflow-hidden">
+        {/* Toggle header */}
+        <button
+          className="flex items-center gap-2 px-3 py-2 w-full text-left text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="uppercase tracking-wider">Legend</span>
+          <span className="ml-auto text-muted-foreground/60">
+            {open ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+          </span>
+        </button>
+
+        {open && (
+          <div className="px-3 pb-3 space-y-1.5 text-[10px] border-t border-border pt-2">
+            {Object.entries(SOURCE_COLORS).map(([type, color]) => (
+              <div key={type} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                <span className="text-muted-foreground capitalize">{type}</span>
+              </div>
+            ))}
+            {showConcepts && (
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="w-2.5 h-2.5 rounded-full border-2 flex-shrink-0"
+                  style={{ borderColor: CONCEPT_COLOR, background: "transparent" }}
+                />
+                <span className="text-muted-foreground">Concept</span>
+              </div>
+            )}
+            <p className="text-muted-foreground pt-1 border-t border-border mt-1">
+              <span className="font-medium">{nodes}</span> nodes ·{" "}
+              <span className="font-medium">{edges}</span> edges
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function GraphView({ onNodeClick }: { onNodeClick: (id: string) => void }) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -381,55 +434,42 @@ export function GraphView({ onNodeClick }: { onNodeClick: (id: string) => void }
         </div>
       )}
 
-      {/* Concept layer toggle */}
-      <div className="absolute top-3 left-3">
+      {/* Bottom-right controls: zoom + concepts toggle */}
+      <div className="absolute bottom-4 right-3 flex flex-col items-end gap-2">
+        {/* Concepts toggle */}
         <Button
           size="sm"
           variant={showConcepts ? "default" : "secondary"}
-          className="h-8 text-xs gap-1.5"
+          className="h-11 px-3 text-xs gap-1.5 shadow-md"
           onClick={() => setShowConcepts((v) => !v)}
         >
-          <Layers className="w-3.5 h-3.5" />
-          Concepts
+          <Layers className="w-4 h-4" />
+          <span>Concepts</span>
           {graphData.concepts.length > 0 && (
             <span className="ml-0.5 opacity-70">{graphData.concepts.length}</span>
           )}
         </Button>
+
+        {/* Zoom buttons */}
+        <div className="flex flex-col gap-1">
+          <Button size="icon" variant="secondary" className="w-11 h-11 shadow-md" onClick={zoomIn}>
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <Button size="icon" variant="secondary" className="w-11 h-11 shadow-md" onClick={zoomOut}>
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Button size="icon" variant="secondary" className="w-11 h-11 shadow-md" onClick={resetZoom}>
+            <Maximize2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* Zoom controls */}
-      <div className="absolute top-3 right-3 flex flex-col gap-1">
-        <Button size="icon" variant="secondary" className="w-8 h-8" onClick={zoomIn}>
-          <ZoomIn className="w-3.5 h-3.5" />
-        </Button>
-        <Button size="icon" variant="secondary" className="w-8 h-8" onClick={zoomOut}>
-          <ZoomOut className="w-3.5 h-3.5" />
-        </Button>
-        <Button size="icon" variant="secondary" className="w-8 h-8" onClick={resetZoom}>
-          <Maximize2 className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-
-      {/* Legend */}
-      <div className="absolute bottom-3 left-3 bg-card/90 backdrop-blur border border-border rounded-lg p-2.5 space-y-1.5 text-[10px]">
-        <p className="font-medium text-muted-foreground uppercase tracking-wider mb-1">Source</p>
-        {Object.entries(SOURCE_COLORS).map(([type, color]) => (
-          <div key={type} className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-            <span className="text-muted-foreground capitalize">{type}</span>
-          </div>
-        ))}
-        {showConcepts && (
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full border-2" style={{ borderColor: CONCEPT_COLOR, background: "transparent" }} />
-            <span className="text-muted-foreground">Concept</span>
-          </div>
-        )}
-        <p className="text-muted-foreground mt-1.5">
-          <span className="font-medium">{graphData.nodes.length}</span> nodes ·{" "}
-          <span className="font-medium">{graphData.edges.length}</span> edges
-        </p>
-      </div>
+      {/* Legend — collapsible, bottom-left */}
+      <LegendPanel
+        nodes={graphData.nodes.length}
+        edges={graphData.edges.length}
+        showConcepts={showConcepts}
+      />
     </div>
   );
 }

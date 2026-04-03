@@ -48,7 +48,7 @@ function App() {
     },
     {
       id: "concepts",
-      label: "Concepts",
+      label: "Topics",
       icon: <Layers className="w-4 h-4" />,
       badge: stats?.totalConcepts,
     },
@@ -115,7 +115,7 @@ function App() {
       </div>
 
       {/* Bottom Navigation */}
-      <nav className="border-t border-border bg-card shrink-0">
+      <nav className="border-t border-border bg-card shrink-0 pb-safe">
         <div className="flex">
           {tabs.map((tab) => (
             <button

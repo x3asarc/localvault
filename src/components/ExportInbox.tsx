@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import { Button } from "@/components/ui/button";
@@ -12,14 +12,20 @@ import {
   Loader2,
   FileText,
   Info,
+  CopyX,
 } from "lucide-react";
 
 export function ExportInbox({ onInboxIngested }: { onInboxIngested: () => void }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [exportState, setExportState] = useState<"idle" | "building" | "done">("idle");
+  const exportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [inboxFiles, setInboxFiles] = useState<{ name: string; content: string }[]>([]);
-  const [ingestResults, setIngestResults] = useState<{ title: string; id: string }[]>([]);
+
+  useEffect(() => {
+    return () => { if (exportTimerRef.current) clearTimeout(exportTimerRef.current); };
+  }, []);
+  const [ingestResults, setIngestResults] = useState<{ title: string; id: string; duplicate?: boolean; failed?: boolean }[]>([]);
   const [ingestProgress, setIngestProgress] = useState(0);
 
   // ── Export vault ──────────────────────────────
@@ -43,7 +49,7 @@ export function ExportInbox({ onInboxIngested }: { onInboxIngested: () => void }
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setExportState("done");
-      setTimeout(() => setExportState("idle"), 3000);
+      exportTimerRef.current = setTimeout(() => setExportState("idle"), 3000);
     } catch (e) {
       console.error(e);
       setExportState("idle");
@@ -76,15 +82,17 @@ export function ExportInbox({ onInboxIngested }: { onInboxIngested: () => void }
     setIngestProgress(0);
     setIngestResults([]);
 
-    const results: { title: string; id: string }[] = [];
+    const results: { title: string; id: string; duplicate?: boolean; failed?: boolean }[] = [];
     for (let i = 0; i < inboxFiles.length; i++) {
       const f = inboxFiles[i];
       try {
         const res = await client.ingestInboxFile({ filename: f.name, content: f.content });
-        results.push({ title: res.title, id: res.articleId });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const isDupe = (res as any).duplicate === true;
+        results.push({ title: res.title, id: res.articleId, duplicate: isDupe });
       } catch (e) {
         console.error("Failed to ingest", f.name, e);
-        results.push({ title: f.name, id: "" });
+        results.push({ title: f.name, id: "", failed: true });
       }
       setIngestProgress(Math.round(((i + 1) / inboxFiles.length) * 100));
       setIngestResults([...results]);
@@ -216,13 +224,17 @@ export function ExportInbox({ onInboxIngested }: { onInboxIngested: () => void }
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Results</p>
               {ingestResults.map((r) => (
                 <div key={r.id || r.title} className="flex items-center gap-2 text-sm">
-                  {r.id ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                  ) : (
+                  {r.failed ? (
                     <Info className="w-4 h-4 text-destructive shrink-0" />
+                  ) : r.duplicate ? (
+                    <CopyX className="w-4 h-4 text-amber-500 shrink-0" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
                   )}
                   <span className="truncate">{r.title}</span>
-                  {r.id && <span className="text-xs text-muted-foreground ml-auto shrink-0">queued</span>}
+                  <span className="text-xs ml-auto shrink-0 text-muted-foreground">
+                    {r.failed ? "error" : r.duplicate ? "already exists" : "queued"}
+                  </span>
                 </div>
               ))}
               {ingestProgress === 100 && (

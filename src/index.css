@@ -118,3 +118,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* iOS safe-area bottom padding for nav bars */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Make sure the html/body allow safe-area env */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

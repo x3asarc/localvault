@@ -63,11 +63,15 @@ export async function addArticle(data: {
   }
 
   // Deduplication guard 2 — same normalized title already exists
-  const titleNorm = normalizeTitle(data.title.trim() || data.content.slice(0, 80));
-  const allTitles = await db.article.findMany({ where: { userId }, select: { id: true, title: true } });
-  const existingByTitle = allTitles.find((a) => normalizeTitle(a.title) === titleNorm);
-  if (existingByTitle) {
-    return { ...existingByTitle, duplicate: true };
+  // Only apply title-dedup when an explicit title was provided (not auto-generated from content)
+  const explicitTitle = data.title.trim();
+  if (explicitTitle) {
+    const titleNorm = normalizeTitle(explicitTitle);
+    const allTitles = await db.article.findMany({ where: { userId }, select: { id: true, title: true } });
+    const existingByTitle = allTitles.find((a) => normalizeTitle(a.title) === titleNorm);
+    if (existingByTitle) {
+      return { ...existingByTitle, duplicate: true };
+    }
   }
 
   const article = await db.article.create({
@@ -94,7 +98,13 @@ export async function getArticles(filter?: { tag?: string; topic?: string; searc
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const articles: any[] = await db.article.findMany({
-    where: { userId },
+    where: {
+      userId,
+      // Push tag filter into DB to avoid loading all articles when filtering
+      ...(filter?.tag
+        ? { articleTags: { some: { tag: { name: filter.tag } } } }
+        : {}),
+    },
     include: {
       articleTags: { include: { tag: true } },
     },
@@ -103,15 +113,7 @@ export async function getArticles(filter?: { tag?: string; topic?: string; searc
 
   let result = articles;
 
-  // Filter by tag
-  if (filter?.tag) {
-    result = result.filter((a) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      a.articleTags.some((at: any) => at.tag.name === filter.tag),
-    );
-  }
-
-  // Filter by topic
+  // Filter by topic (still in-memory since topics is a JSON string column)
   if (filter?.topic) {
     result = result.filter((a) => {
       const topics: string[] = a.topics ? JSON.parse(a.topics) : [];
@@ -572,11 +574,19 @@ export async function ingestInboxFile(data: { filename: string; content: string 
     if (endFm > 0) content = content.slice(endFm + 3).trim();
   }
 
-  // Deduplication guard
+  // Deduplication guard 1 — normalized content hash
   const hash = contentHash(userId, content);
-  const existing = await db.article.findFirst({ where: { userId, contentHash: hash } });
-  if (existing) {
-    return { articleId: existing.id, title: existing.title, duplicate: true };
+  const existingByHash = await db.article.findFirst({ where: { userId, contentHash: hash } });
+  if (existingByHash) {
+    return { articleId: existingByHash.id, title: existingByHash.title, duplicate: true };
+  }
+
+  // Deduplication guard 2 — normalized title match
+  const titleNorm = normalizeTitle(title);
+  const allTitles = await db.article.findMany({ where: { userId }, select: { id: true, title: true } });
+  const existingByTitle = allTitles.find((a) => normalizeTitle(a.title) === titleNorm);
+  if (existingByTitle) {
+    return { articleId: existingByTitle.id, title: existingByTitle.title, duplicate: true };
   }
 
   const article = await db.article.create({
@@ -661,16 +671,13 @@ export async function adminCleanupDuplicates() {
 export async function getLibraryStats() {
   const userId = await requireUserId();
 
-  const userArticleIds = await db.article
-    .findMany({ where: { userId }, select: { id: true } })
-    .then((arts) => arts.map((a) => a.id));
-
   const [totalArticles, processedArticles, totalTags, totalConcepts, totalQueries] =
     await Promise.all([
       db.article.count({ where: { userId } }),
       db.article.count({ where: { userId, aiStatus: "done" } }),
+      // Count tags that belong to at least one article owned by this user
       db.tag.count({
-        where: { articles: { some: { articleId: { in: userArticleIds } } } },
+        where: { articles: { some: { article: { userId } } } },
       }),
       db.concept.count({ where: { userId } }),
       db.savedQuery.count({ where: { userId } }),

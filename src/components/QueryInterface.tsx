@@ -109,10 +109,11 @@ export function QueryInterface() {
   const canAsk = question.trim().length > 5;
 
   // Combine active queries (in-session) with saved history
+  // savedQueries is already capped at 20 server-side; show all of them
   const allQueryIds = [
     ...activeQueryIds,
     ...(savedQueries?.filter((q) => !activeQueryIds.includes(q.id)).map((q) => q.id) || []),
-  ].slice(0, 10);
+  ];
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
