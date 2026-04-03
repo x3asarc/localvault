@@ -16,9 +16,10 @@ model User {
   image  String?
   handle String?
 
-  articles  Article[]
-  queries   SavedQuery[]
-  concepts  Concept[]
+  articles    Article[]
+  queries     SavedQuery[]
+  concepts    Concept[]
+  aiSettings  AISettings?
 }
 
 model Article {
@@ -100,4 +101,18 @@ model SavedQuery {
   answer    String
   sources   String   // JSON array of article IDs used
   createdAt DateTime @default(now())
+}
+
+// Stores the active AI provider config per user.
+// In local mode there is only one user so this is effectively a global config.
+model AISettings {
+  id         String   @id @default("default")
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+
+  provider   String   @default("anthropic") // anthropic | openai | google | mistral | groq | openrouter | ollama
+  model      String   @default("claude-3-5-haiku-20241022")
+  apiKey     String   @default("")          // encrypted at rest in production; plaintext locally
+  ollamaUrl  String   @default("http://localhost:11434") // only used when provider=ollama
+  updatedAt  DateTime @updatedAt
 }

@@ -1,41 +1,10 @@
 import {
   getQueue,
-  mcp,
   type Job,
   type QueueHandlers,
 } from "@adaptive-ai/sdk/server";
 import { db } from "@/api/db";
-
-// Retry wrapper for mcp.promptAgent calls that may fail due to transient network/timeout errors
-async function promptAgentWithRetry<T>(
-  options: Parameters<typeof mcp.promptAgent>[0],
-  maxRetries = 3,
-  delayMs = 5000,
-): Promise<{ response: T }> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await mcp.promptAgent(options);
-      return result as unknown as { response: T };
-    } catch (err) {
-      lastError = err;
-      const isTimeout =
-        err instanceof Error &&
-        (err.message.includes("fetch failed") ||
-          err.message.includes("Headers Timeout") ||
-          err.message.includes("UND_ERR_HEADERS_TIMEOUT") ||
-          err.message.includes("ECONNRESET") ||
-          err.message.includes("socket hang up"));
-      if (isTimeout && attempt < maxRetries) {
-        console.warn(`[queue] promptAgent attempt ${attempt} failed with timeout, retrying in ${delayMs}ms…`);
-        await new Promise((r) => setTimeout(r, delayMs * attempt));
-      } else {
-        throw err;
-      }
-    }
-  }
-  throw lastError;
-}
+import { generateJSON } from "@/api/ai";
 
 // Process a newly added article: summarize, extract key points, topics, tags, and find connections
 export const jobs = {
@@ -53,48 +22,39 @@ export const jobs = {
         where: { id: payload.articleId },
       });
 
-      if (!article) {
-        throw new Error("Article not found");
-      }
+      if (!article) throw new Error("Article not found");
 
       // Step 1: Summarize and extract structure
-      const { response: analysis } = await promptAgentWithRetry<{
+      const analysis = await generateJSON<{
         summary: string;
         keyPoints: string[];
         topics: string[];
         tags: string[];
-      }>({
-        message: `Analyze this piece of content and extract key information.
+      }>(
+        `Analyze this piece of content and extract key information.
 
 Title: ${article.title}
 Source type: ${article.sourceType}
 Content:
 ${article.content.slice(0, 8000)}
 
-Please provide a structured analysis.`,
-        outputJsonSchema: {
+Return a JSON object with:
+- summary: 2-4 sentence summary
+- keyPoints: array of 5-8 most important points
+- topics: array of 3-6 topic/theme labels (e.g. "machine learning", "pricing strategy")
+- tags: array of 5-10 specific keyword tags (lowercase, single or two words)`,
+        {
           type: "object",
           properties: {
-            summary: { type: "string", description: "2-4 sentence summary of the content" },
-            keyPoints: {
-              type: "array",
-              items: { type: "string" },
-              description: "5-8 most important points or takeaways",
-            },
-            topics: {
-              type: "array",
-              items: { type: "string" },
-              description: "3-6 topic/theme labels for this content (e.g. 'machine learning', 'pricing strategy')",
-            },
-            tags: {
-              type: "array",
-              items: { type: "string" },
-              description: "5-10 specific keyword tags (lowercase, single or two words)",
-            },
+            summary: { type: "string" },
+            keyPoints: { type: "array", items: { type: "string" } },
+            topics: { type: "array", items: { type: "string" } },
+            tags: { type: "array", items: { type: "string" } },
           },
           required: ["summary", "keyPoints", "topics", "tags"],
         },
-      });
+        payload.userId,
+      );
 
       const { summary, keyPoints, topics, tags } = analysis;
 
@@ -114,11 +74,14 @@ Please provide a structured analysis.`,
 
       if (existingArticles.length > 0) {
         const existingList = existingArticles
-          .map((a) => `ID: ${a.id} | Title: ${a.title} | Topics: ${a.topics || ""} | Summary: ${(a.summary || "").slice(0, 200)}`)
+          .map(
+            (a) =>
+              `ID: ${a.id} | Title: ${a.title} | Topics: ${a.topics || ""} | Summary: ${(a.summary || "").slice(0, 200)}`,
+          )
           .join("\n");
 
-        const { response: connResult } = await promptAgentWithRetry<{ connections: ConnectionResult[] }>({
-          message: `Given this new article:
+        const connResult = await generateJSON<{ connections: ConnectionResult[] }>(
+          `Given this new article:
 Title: ${article.title}
 Topics: ${topics.join(", ")}
 Summary: ${summary}
@@ -126,8 +89,11 @@ Summary: ${summary}
 And these existing articles in the knowledge base:
 ${existingList}
 
-Find the most meaningful conceptual connections between the new article and existing ones.`,
-          outputJsonSchema: {
+Find the most meaningful conceptual connections. Return JSON with a "connections" array (up to 5) where each item has:
+- targetId: the article ID
+- reason: 1-2 sentence explanation
+- strength: 0-1 float indicating connection strength`,
+          {
             type: "object",
             properties: {
               connections: {
@@ -136,17 +102,17 @@ Find the most meaningful conceptual connections between the new article and exis
                   type: "object",
                   properties: {
                     targetId: { type: "string" },
-                    reason: { type: "string", description: "1-2 sentence explanation of connection" },
-                    strength: { type: "number", description: "0-1, how strong the connection is" },
+                    reason: { type: "string" },
+                    strength: { type: "number" },
                   },
                   required: ["targetId", "reason", "strength"],
                 },
-                description: "Up to 5 most meaningful connections",
               },
             },
             required: ["connections"],
           },
-        });
+          payload.userId,
+        );
 
         connections = (connResult.connections || []).slice(0, 5);
       }
@@ -178,7 +144,7 @@ Find the most meaningful conceptual connections between the new article and exis
         }
       }
 
-      // Save all results
+      // Save results
       await db.article.update({
         where: { id: payload.articleId },
         data: {
@@ -247,7 +213,6 @@ Find the most meaningful conceptual connections between the new article and exis
     console.log(`[queue] answerQuery job ${job.id} for question: ${payload.question.slice(0, 50)}`);
 
     try {
-      // Fetch all processed articles for this user
       const articles = await db.article.findMany({
         where: { userId: payload.userId, aiStatus: "done" },
         orderBy: { createdAt: "desc" },
@@ -257,12 +222,14 @@ Find the most meaningful conceptual connections between the new article and exis
       if (articles.length === 0) {
         await db.savedQuery.update({
           where: { id: payload.queryId },
-          data: { answer: "No articles have been processed yet. Add some content to your knowledge base first.", sources: "[]" },
+          data: {
+            answer: "No articles have been processed yet. Add some content to your knowledge base first.",
+            sources: "[]",
+          },
         });
         return;
       }
 
-      // Build context from articles
       const context = articles
         .map(
           (a) =>
@@ -270,37 +237,33 @@ Find the most meaningful conceptual connections between the new article and exis
         )
         .join("\n\n---\n\n");
 
-      const { response: result } = await promptAgentWithRetry<{
+      const result = await generateJSON<{
         answer: string;
         sourceIds: string[];
         confidence: string;
-      }>({
-        message: `You are answering a question using a personal knowledge base. Use only the information from the articles below.
+      }>(
+        `You are answering a question using a personal knowledge base. Use only the information from the articles below.
 
 KNOWLEDGE BASE (${articles.length} articles):
 ${context}
 
 QUESTION: ${payload.question}
 
-Answer the question thoroughly, citing which articles you drew from. If the knowledge base doesn't have relevant information, say so clearly.`,
-        outputJsonSchema: {
+Return JSON with:
+- answer: complete answer to the question, citing which articles you drew from
+- sourceIds: array of article IDs used
+- confidence: "high" | "medium" | "low"`,
+        {
           type: "object",
           properties: {
-            answer: { type: "string", description: "Complete answer to the question" },
-            sourceIds: {
-              type: "array",
-              items: { type: "string" },
-              description: "Article IDs used to answer the question",
-            },
-            confidence: {
-              type: "string",
-              enum: ["high", "medium", "low"],
-              description: "How confident is the answer based on available knowledge",
-            },
+            answer: { type: "string" },
+            sourceIds: { type: "array", items: { type: "string" } },
+            confidence: { type: "string", enum: ["high", "medium", "low"] },
           },
           required: ["answer", "sourceIds", "confidence"],
         },
-      });
+        payload.userId,
+      );
 
       const { answer, sourceIds, confidence } = result;
 

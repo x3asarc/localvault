@@ -1,10 +1,12 @@
-# Important: keep these in the repo git reverts to previous versions
-!.env.development
-!.env.production
+# Environment — never commit secrets; only .env.example is safe to commit
+.env
+.env.development
+.env.production
 
-# Important: ignore production database so git reverts don't overwrite it
-development.db
-production.db
+# Databases — never commit
+*.db
+*.db-shm
+*.db-wal
 
 # Prisma
 generated
@@ -44,3 +46,6 @@ production-queue.db-wal
 errors.db
 errors.db-wal
 errors.db-shm
+
+# Generated build artifacts
+dev-api-exports.d.ts

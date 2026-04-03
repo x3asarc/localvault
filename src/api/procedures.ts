@@ -4,6 +4,7 @@ import { getAuth } from "@adaptive-ai/sdk/server";
 import { queue } from "@/api/queue";
 import { nanoid } from "nanoid";
 import { createHash } from "crypto";
+import { testConnection, DEFAULT_MODELS, type AIProvider, type AIConfig } from "@/api/ai";
 
 /** Strip markdown links [text](url) → text, collapse whitespace, lowercase */
 function normalizeContent(content: string): string {
@@ -603,6 +604,79 @@ export async function ingestInboxFile(data: { filename: string; content: string 
 
   queue.processArticle({ articleId: article.id, userId });
   return { articleId: article.id, title };
+}
+
+// ──────────────────────────────────────────────
+// AI Settings
+// ──────────────────────────────────────────────
+
+export async function getAISettings() {
+  const userId = await requireUserId();
+
+  const settings = await db.aISettings.findUnique({ where: { userId } });
+
+  return {
+    provider: (settings?.provider ?? "anthropic") as AIProvider,
+    model: settings?.model ?? DEFAULT_MODELS["anthropic"],
+    // Never return the raw key to the client — return a masked version
+    apiKeySet: !!(settings?.apiKey && settings.apiKey.length > 0),
+    apiKeyPreview: settings?.apiKey
+      ? settings.apiKey.slice(0, 6) + "••••••••" + settings.apiKey.slice(-4)
+      : "",
+    ollamaUrl: settings?.ollamaUrl ?? "http://localhost:11434",
+  };
+}
+
+export async function saveAISettings(data: {
+  provider: string;
+  model: string;
+  apiKey?: string;
+  ollamaUrl?: string;
+}) {
+  const userId = await requireUserId();
+
+  // Fetch existing to preserve key if not updating
+  const existing = await db.aISettings.findUnique({ where: { userId } });
+  const apiKey = data.apiKey !== undefined && data.apiKey !== ""
+    ? data.apiKey
+    : (existing?.apiKey ?? "");
+
+  await db.aISettings.upsert({
+    where: { userId },
+    create: {
+      userId,
+      provider: data.provider,
+      model: data.model,
+      apiKey,
+      ollamaUrl: data.ollamaUrl ?? "http://localhost:11434",
+    },
+    update: {
+      provider: data.provider,
+      model: data.model,
+      apiKey,
+      ollamaUrl: data.ollamaUrl ?? "http://localhost:11434",
+    },
+  });
+
+  return { success: true };
+}
+
+export async function testAIConnection(data: {
+  provider: string;
+  model: string;
+  apiKey: string;
+  ollamaUrl?: string;
+}) {
+  await requireUserId();
+
+  const config: AIConfig = {
+    provider: data.provider as AIProvider,
+    model: data.model,
+    apiKey: data.apiKey,
+    ollamaUrl: data.ollamaUrl ?? "http://localhost:11434",
+  };
+
+  return testConnection(config);
 }
 
 // ──────────────────────────────────────────────

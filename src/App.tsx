@@ -8,10 +8,11 @@ import { ConceptsView } from "@/components/ConceptsView";
 import { GraphView } from "@/components/GraphView";
 import { ExportInbox } from "@/components/ExportInbox";
 import { ArticleDetail } from "@/components/ArticleDetail";
-import { BookOpen, Plus, Search, Layers, GitBranch, FolderDown } from "lucide-react";
+import { SettingsPage } from "@/components/SettingsPage";
+import { BookOpen, Plus, Search, Layers, GitBranch, FolderDown, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "library" | "add" | "query" | "concepts" | "graph" | "export";
+type Tab = "library" | "add" | "query" | "concepts" | "graph" | "export" | "settings";
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("library");
@@ -56,6 +57,11 @@ function App() {
       id: "export",
       label: "Sync",
       icon: <FolderDown className="w-4 h-4" />,
+    },
+    {
+      id: "settings",
+      label: "AI",
+      icon: <Settings className="w-4 h-4" />,
     },
   ];
 
@@ -112,6 +118,7 @@ function App() {
         {activeTab === "export" && (
           <ExportInbox onInboxIngested={invalidateAll} />
         )}
+        {activeTab === "settings" && <SettingsPage />}
       </div>
 
       {/* Bottom Navigation */}
