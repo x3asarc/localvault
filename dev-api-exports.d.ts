@@ -74,6 +74,38 @@ export declare function getSavedQueries(): Promise<{
 export declare function deleteQuery(id: string): Promise<{
 	success: boolean;
 }>;
+export declare function getGraphData(): Promise<{
+	nodes: {
+		id: string;
+		title: string;
+		aiStatus: string;
+		topics: string[];
+		sourceType: string;
+		createdAt: Date;
+	}[];
+	edges: {
+		id: string;
+		source: string;
+		target: string;
+		strength: number;
+		reason: string;
+	}[];
+	concepts: {
+		id: string;
+		name: string;
+		articleIds: string[];
+	}[];
+}>;
+export declare function exportObsidianVault(): Promise<{
+	files: Record<string, string>;
+}>;
+export declare function ingestInboxFile(data: {
+	filename: string;
+	content: string;
+}): Promise<{
+	articleId: string;
+	title: string;
+}>;
 export declare function getLibraryStats(): Promise<{
 	totalArticles: number;
 	processedArticles: number;

@@ -6,6 +6,37 @@ import {
 } from "@adaptive-ai/sdk/server";
 import { db } from "@/api/db";
 
+// Retry wrapper for mcp.promptAgent calls that may fail due to transient network/timeout errors
+async function promptAgentWithRetry<T>(
+  options: Parameters<typeof mcp.promptAgent>[0],
+  maxRetries = 3,
+  delayMs = 5000,
+): Promise<{ response: T }> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await mcp.promptAgent(options);
+      return result as unknown as { response: T };
+    } catch (err) {
+      lastError = err;
+      const isTimeout =
+        err instanceof Error &&
+        (err.message.includes("fetch failed") ||
+          err.message.includes("Headers Timeout") ||
+          err.message.includes("UND_ERR_HEADERS_TIMEOUT") ||
+          err.message.includes("ECONNRESET") ||
+          err.message.includes("socket hang up"));
+      if (isTimeout && attempt < maxRetries) {
+        console.warn(`[queue] promptAgent attempt ${attempt} failed with timeout, retrying in ${delayMs}ms…`);
+        await new Promise((r) => setTimeout(r, delayMs * attempt));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw lastError;
+}
+
 // Process a newly added article: summarize, extract key points, topics, tags, and find connections
 export const jobs = {
   processArticle: async (payload: { articleId: string; userId: string }, job: Job) => {
@@ -27,7 +58,12 @@ export const jobs = {
       }
 
       // Step 1: Summarize and extract structure
-      const { response: analysis } = await mcp.promptAgent({
+      const { response: analysis } = await promptAgentWithRetry<{
+        summary: string;
+        keyPoints: string[];
+        topics: string[];
+        tags: string[];
+      }>({
         message: `Analyze this piece of content and extract key information.
 
 Title: ${article.title}
@@ -60,12 +96,7 @@ Please provide a structured analysis.`,
         },
       });
 
-      const { summary, keyPoints, topics, tags } = analysis as {
-        summary: string;
-        keyPoints: string[];
-        topics: string[];
-        tags: string[];
-      };
+      const { summary, keyPoints, topics, tags } = analysis;
 
       // Step 2: Find connections with existing articles
       const existingArticles = await db.article.findMany({
@@ -86,7 +117,7 @@ Please provide a structured analysis.`,
           .map((a) => `ID: ${a.id} | Title: ${a.title} | Topics: ${a.topics || ""} | Summary: ${(a.summary || "").slice(0, 200)}`)
           .join("\n");
 
-        const { response: connResult } = await mcp.promptAgent({
+        const { response: connResult } = await promptAgentWithRetry<{ connections: ConnectionResult[] }>({
           message: `Given this new article:
 Title: ${article.title}
 Topics: ${topics.join(", ")}
@@ -117,7 +148,7 @@ Find the most meaningful conceptual connections between the new article and exis
           },
         });
 
-        connections = ((connResult as { connections: ConnectionResult[] }).connections || []).slice(0, 5);
+        connections = (connResult.connections || []).slice(0, 5);
       }
 
       // Step 3: Update concept wiki
@@ -239,7 +270,11 @@ Find the most meaningful conceptual connections between the new article and exis
         )
         .join("\n\n---\n\n");
 
-      const { response: result } = await mcp.promptAgent({
+      const { response: result } = await promptAgentWithRetry<{
+        answer: string;
+        sourceIds: string[];
+        confidence: string;
+      }>({
         message: `You are answering a question using a personal knowledge base. Use only the information from the articles below.
 
 KNOWLEDGE BASE (${articles.length} articles):
@@ -267,11 +302,7 @@ Answer the question thoroughly, citing which articles you drew from. If the know
         },
       });
 
-      const { answer, sourceIds, confidence } = result as {
-        answer: string;
-        sourceIds: string[];
-        confidence: string;
-      };
+      const { answer, sourceIds, confidence } = result;
 
       await db.savedQuery.update({
         where: { id: payload.queryId },

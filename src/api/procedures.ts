@@ -278,6 +278,278 @@ export async function deleteQuery(id: string) {
 }
 
 // ──────────────────────────────────────────────
+// Graph
+// ──────────────────────────────────────────────
+
+export async function getGraphData() {
+  const userId = await requireUserId();
+
+  const [articles, connections, concepts] = await Promise.all([
+    db.article.findMany({
+      where: { userId },
+      select: { id: true, title: true, aiStatus: true, topics: true, sourceType: true, createdAt: true },
+    }),
+    db.articleConnection.findMany({
+      where: { sourceArticle: { userId } },
+      select: { id: true, sourceArticleId: true, targetArticleId: true, strength: true, reason: true },
+    }),
+    db.concept.findMany({
+      where: { userId },
+      select: { id: true, name: true, articleIds: true },
+    }),
+  ]);
+
+  return {
+    nodes: articles.map((a) => ({
+      id: a.id,
+      title: a.title,
+      aiStatus: a.aiStatus,
+      topics: a.topics ? (JSON.parse(a.topics) as string[]) : [],
+      sourceType: a.sourceType,
+      createdAt: a.createdAt,
+    })),
+    edges: connections.map((c) => ({
+      id: c.id,
+      source: c.sourceArticleId,
+      target: c.targetArticleId,
+      strength: c.strength,
+      reason: c.reason,
+    })),
+    concepts: concepts.map((c) => ({
+      id: c.id,
+      name: c.name,
+      articleIds: JSON.parse(c.articleIds ?? "[]") as string[],
+    })),
+  };
+}
+
+// ──────────────────────────────────────────────
+// Obsidian Vault Export
+// ──────────────────────────────────────────────
+
+export async function exportObsidianVault() {
+  const userId = await requireUserId();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const articles: any[] = await db.article.findMany({
+    where: { userId },
+    include: {
+      articleTags: { include: { tag: true } },
+      connections: { include: { targetArticle: true }, orderBy: { strength: "desc" } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const concepts = await db.concept.findMany({
+    where: { userId },
+    orderBy: { name: "asc" },
+  });
+
+  const queries = await db.savedQuery.findMany({
+    where: { userId, answer: { not: "" } },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  // Build a title->id slug map for wikilinks
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const slugMap = new Map<string, any>();
+  for (const a of articles) slugMap.set(a.id, a);
+
+  function toSlug(title: string) {
+    return title.replace(/[[\]#|^\\]/g, "").trim();
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function articleToMd(article: any): string {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tags: string[] = article.articleTags.map((at: any) => at.tag.name);
+    const topics: string[] = article.topics ? JSON.parse(article.topics) : [];
+    const keyPoints: string[] = article.keyPoints ? JSON.parse(article.keyPoints) : [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const connections: any[] = article.connections || [];
+
+    const frontmatter = [
+      "---",
+      `title: "${toSlug(article.title)}"`,
+      `source_type: ${article.sourceType}`,
+      article.url ? `url: ${article.url}` : null,
+      `ai_status: ${article.aiStatus}`,
+      `created: ${article.createdAt.toISOString().split("T")[0]}`,
+      topics.length ? `topics:\n${topics.map((t: string) => `  - ${t}`).join("\n")}` : null,
+      tags.length ? `tags:\n${tags.map((t: string) => `  - ${t}`).join("\n")}` : null,
+      "---",
+    ].filter(Boolean).join("\n");
+
+    const lines: string[] = [frontmatter, "", `# ${article.title}`, ""];
+
+    if (article.url) lines.push(`> Source: [${article.url}](${article.url})`, "");
+
+    if (article.summary) {
+      lines.push("## Summary", "", article.summary, "");
+    }
+
+    if (keyPoints.length) {
+      lines.push("## Key Points", "");
+      for (const p of keyPoints) lines.push(`- ${p}`);
+      lines.push("");
+    }
+
+    if (topics.length) {
+      lines.push("## Topics", "");
+      for (const t of topics) lines.push(`- [[Concept - ${t}]]`);
+      lines.push("");
+    }
+
+    if (connections.length) {
+      lines.push("## Connected Articles", "");
+      for (const c of connections) {
+        const target = slugMap.get(c.targetArticleId);
+        if (!target) continue;
+        lines.push(`- [[${toSlug(target.title)}]] — ${c.reason} _(${Math.round(c.strength * 100)}% match)_`);
+      }
+      lines.push("");
+    }
+
+    lines.push("## Raw Content", "", article.content);
+
+    return lines.join("\n");
+  }
+
+  // Build file map: path -> content
+  const files: Record<string, string> = {};
+
+  // Articles
+  for (const a of articles) {
+    const slug = toSlug(a.title);
+    files[`articles/${slug}.md`] = articleToMd(a);
+  }
+
+  // Concept MOC files
+  for (const concept of concepts) {
+    const conceptArticleIds: string[] = JSON.parse(concept.articleIds ?? "[]");
+    const conceptArticles = conceptArticleIds
+      .map((id) => slugMap.get(id))
+      .filter(Boolean);
+
+    const lines = [
+      "---",
+      `title: "Concept - ${concept.name}"`,
+      `type: concept`,
+      `article_count: ${conceptArticleIds.length}`,
+      "---",
+      "",
+      `# ${concept.name}`,
+      "",
+      `> *Auto-generated concept map. ${conceptArticleIds.length} article${conceptArticleIds.length !== 1 ? "s" : ""} in this topic.*`,
+      "",
+      "## Articles",
+      "",
+    ];
+    for (const a of conceptArticles) {
+      lines.push(`- [[${toSlug(a.title)}]]`);
+      if (a.summary) lines.push(`  > ${a.summary.slice(0, 120)}...`);
+    }
+    files[`concepts/Concept - ${concept.name}.md`] = lines.join("\n");
+  }
+
+  // Q&A log
+  if (queries.length) {
+    const qaLines = ["---", 'title: "Q&A Log"', "type: qa-log", "---", "", "# Q&A Log", "", "> *Your saved questions and AI answers.*", ""];
+    for (const q of queries) {
+      qaLines.push(`## ${q.question}`, "", `*${q.createdAt.toISOString().split("T")[0]}*`, "", q.answer, "");
+      qaLines.push("---", "");
+    }
+    files["Q&A Log.md"] = qaLines.join("\n");
+  }
+
+  // Home MOC
+  const homeMoc = [
+    "---",
+    'title: "Home"',
+    "---",
+    "",
+    "# Knowledge Base",
+    "",
+    `> *${articles.length} articles · ${concepts.length} concepts · Generated ${new Date().toISOString().split("T")[0]}*`,
+    "",
+    "## Concepts",
+    "",
+    ...concepts.map((c) => `- [[Concept - ${c.name}]]`),
+    "",
+    "## All Articles",
+    "",
+    ...articles.map((a) => `- [[${toSlug(a.title)}]]`),
+    "",
+    "## Q&A",
+    "",
+    "- [[Q&A Log]]",
+  ].join("\n");
+  files["Home.md"] = homeMoc;
+
+  // Inbox README
+  files["inbox/README.md"] = [
+    "---",
+    'title: "Inbox"',
+    "---",
+    "",
+    "# Inbox",
+    "",
+    "Drop `.md` files here. The knowledge base app will automatically detect them and run the full AI pipeline.",
+    "",
+    "## How to use",
+    "",
+    "1. Create a `.md` file with your content",
+    "2. Put it in this `inbox/` folder",
+    "3. Open the Knowledge Base app and click **Upload from Inbox**",
+    "4. The AI will summarize, tag, and connect it to your existing library",
+    "",
+    "## Template",
+    "",
+    "```markdown",
+    "# Your Title Here",
+    "",
+    "Paste your content here...",
+    "```",
+  ].join("\n");
+
+  return { files };
+}
+
+// ──────────────────────────────────────────────
+// Inbox file upload
+// ──────────────────────────────────────────────
+
+export async function ingestInboxFile(data: { filename: string; content: string }) {
+  const userId = await requireUserId();
+
+  // Parse title from first # heading or filename
+  const titleMatch = data.content.match(/^#\s+(.+)$/m);
+  const title = titleMatch ? titleMatch[1].trim() : data.filename.replace(/\.md$/, "");
+
+  // Strip frontmatter if present
+  let content = data.content;
+  if (content.startsWith("---")) {
+    const endFm = content.indexOf("---", 3);
+    if (endFm > 0) content = content.slice(endFm + 3).trim();
+  }
+
+  const article = await db.article.create({
+    data: {
+      id: nanoid(),
+      userId,
+      title,
+      content,
+      sourceType: "note",
+      aiStatus: "pending",
+    },
+  });
+
+  queue.processArticle({ articleId: article.id, userId });
+  return { articleId: article.id, title };
+}
+
+// ──────────────────────────────────────────────
 // Stats
 // ──────────────────────────────────────────────
 
