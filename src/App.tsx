@@ -66,9 +66,9 @@ function App() {
   };
 
   return (
-    <main className="flex flex-col min-h-screen bg-background">
+    <main className="flex flex-col h-screen bg-background overflow-hidden">
       {/* Header */}
-      <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
+      <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between shrink-0">
         <div>
           <h1 className="font-semibold text-lg tracking-tight">Knowledge Base</h1>
           {stats && (
@@ -80,7 +80,7 @@ function App() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {/* Graph node → article detail overlay */}
         {activeTab === "graph" && graphSelectedId ? (
           <ArticleDetail
@@ -107,14 +107,14 @@ function App() {
           />
         )}
         {activeTab === "query" && <QueryInterface />}
-        {activeTab === "concepts" && <ConceptsView />}
+        {activeTab === "concepts" && <ConceptsView onArticleProcessed={invalidateAll} />}
         {activeTab === "export" && (
           <ExportInbox onInboxIngested={invalidateAll} />
         )}
       </div>
 
       {/* Bottom Navigation */}
-      <nav className="border-t border-border bg-card">
+      <nav className="border-t border-border bg-card shrink-0">
         <div className="flex">
           {tabs.map((tab) => (
             <button

@@ -18,6 +18,23 @@ export declare function addArticle(data: {
 	title: string;
 	content: string;
 	sourceType: string;
+	contentHash: string | null;
+	summary: string | null;
+	keyPoints: string | null;
+	topics: string | null;
+	aiStatus: string;
+	aiJobId: number | null;
+	createdAt: Date;
+	updatedAt: Date;
+} | {
+	duplicate: boolean;
+	url: string | null;
+	id: string;
+	userId: string;
+	title: string;
+	content: string;
+	sourceType: string;
+	contentHash: string | null;
 	summary: string | null;
 	keyPoints: string | null;
 	topics: string | null;
@@ -105,6 +122,15 @@ export declare function ingestInboxFile(data: {
 }): Promise<{
 	articleId: string;
 	title: string;
+	duplicate: boolean;
+} | {
+	articleId: string;
+	title: string;
+	duplicate?: undefined;
+}>;
+export declare function cleanupDuplicates(): Promise<{
+	deleted: number;
+	message: string;
 }>;
 export declare function getLibraryStats(): Promise<{
 	totalArticles: number;

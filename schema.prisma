@@ -31,6 +31,9 @@ model Article {
   content     String   // raw text content
   sourceType  String   @default("text") // "url", "text", "twitter", "podcast", "note"
 
+  // Deduplication
+  contentHash String?  // sha256(userId|content) — prevents duplicate submissions
+
   // AI-generated fields
   summary     String?
   keyPoints   String?  // JSON array of key points

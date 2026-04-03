@@ -3,6 +3,13 @@ import { env } from "@/lib/env";
 import { getAuth } from "@adaptive-ai/sdk/server";
 import { queue } from "@/api/queue";
 import { nanoid } from "nanoid";
+import { createHash } from "crypto";
+
+function contentHash(userId: string, content: string): string {
+  return createHash("sha256")
+    .update(userId + "|" + content.trim())
+    .digest("hex");
+}
 
 async function requireUserId(): Promise<string> {
   const auth = await getAuth({ required: true });
@@ -33,6 +40,13 @@ export async function addArticle(data: {
 }) {
   const userId = await requireUserId();
 
+  // Deduplication guard — reject if identical content already exists for this user
+  const hash = contentHash(userId, data.content);
+  const existing = await db.article.findFirst({ where: { userId, contentHash: hash } });
+  if (existing) {
+    return { ...existing, duplicate: true };
+  }
+
   const article = await db.article.create({
     data: {
       id: nanoid(),
@@ -42,6 +56,7 @@ export async function addArticle(data: {
       url: data.url?.trim() || null,
       sourceType: data.sourceType,
       aiStatus: "pending",
+      contentHash: hash,
     },
   });
 
@@ -534,6 +549,13 @@ export async function ingestInboxFile(data: { filename: string; content: string 
     if (endFm > 0) content = content.slice(endFm + 3).trim();
   }
 
+  // Deduplication guard
+  const hash = contentHash(userId, content);
+  const existing = await db.article.findFirst({ where: { userId, contentHash: hash } });
+  if (existing) {
+    return { articleId: existing.id, title: existing.title, duplicate: true };
+  }
+
   const article = await db.article.create({
     data: {
       id: nanoid(),
@@ -542,11 +564,62 @@ export async function ingestInboxFile(data: { filename: string; content: string 
       content,
       sourceType: "note",
       aiStatus: "pending",
+      contentHash: hash,
     },
   });
 
   queue.processArticle({ articleId: article.id, userId });
   return { articleId: article.id, title };
+}
+
+// ──────────────────────────────────────────────
+// Admin / Maintenance
+// ──────────────────────────────────────────────
+
+export async function cleanupDuplicates() {
+  const userId = await requireUserId();
+
+  // Find all articles for this user
+  const articles = await db.article.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" }, // keep oldest
+    select: { id: true, content: true, createdAt: true },
+  });
+
+  // Group by content hash
+  const seen = new Map<string, string>(); // hash -> first article id
+  const toDelete: string[] = [];
+
+  for (const article of articles) {
+    const hash = contentHash(userId, article.content);
+    if (seen.has(hash)) {
+      toDelete.push(article.id);
+    } else {
+      seen.set(hash, article.id);
+    }
+  }
+
+  if (toDelete.length === 0) {
+    return { deleted: 0, message: "No duplicates found." };
+  }
+
+  // Delete duplicates (cascade via DB)
+  await db.article.deleteMany({ where: { id: { in: toDelete } } });
+
+  // Also backfill contentHash on remaining articles that don't have it
+  const remaining = await db.article.findMany({
+    where: { userId, contentHash: null },
+    select: { id: true, content: true },
+  });
+  for (const a of remaining) {
+    const hash = contentHash(userId, a.content);
+    await db.article.update({ where: { id: a.id }, data: { contentHash: hash } });
+  }
+
+  return {
+    deleted: toDelete.length,
+    message: `Deleted ${toDelete.length} duplicate article${toDelete.length !== 1 ? "s" : ""}. Backfilled hashes on ${remaining.length} articles.`,
+  };
 }
 
 // ──────────────────────────────────────────────

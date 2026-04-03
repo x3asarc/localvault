@@ -52,6 +52,8 @@ export function AddContent({ onAdded }: AddContentProps) {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
+  const [justAdded, setJustAdded] = useState(false);
+  const [wasDuplicate, setWasDuplicate] = useState(false);
 
   const addMutation = useMutation({
     mutationFn: () =>
@@ -61,16 +63,30 @@ export function AddContent({ onAdded }: AddContentProps) {
         url: url.trim() || undefined,
         sourceType,
       }),
-    onSuccess: () => {
-      setTitle("");
-      setUrl("");
-      setContent("");
-      onAdded();
+    onSuccess: (result) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isDupe = (result as any).duplicate === true;
+      setWasDuplicate(isDupe);
+      setJustAdded(true);
+      if (!isDupe) {
+        setTitle("");
+        setUrl("");
+        setContent("");
+        setTimeout(() => {
+          setJustAdded(false);
+          onAdded();
+        }, 1200);
+      } else {
+        setTimeout(() => {
+          setJustAdded(false);
+          setWasDuplicate(false);
+        }, 3000);
+      }
     },
   });
 
   const currentType = sourceTypes.find((s) => s.id === sourceType)!;
-  const canSubmit = content.trim().length > 20;
+  const canSubmit = content.trim().length > 20 && !justAdded;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -182,10 +198,20 @@ export function AddContent({ onAdded }: AddContentProps) {
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Adding to library...
             </>
+          ) : justAdded && wasDuplicate ? (
+            "Already in your library"
+          ) : justAdded ? (
+            "Added! ✓"
           ) : (
             "Add to Library"
           )}
         </Button>
+
+        {justAdded && wasDuplicate && (
+          <p className="text-sm text-amber-500 text-center">
+            This content is already in your library — skipped to avoid duplicates.
+          </p>
+        )}
 
         {addMutation.isError && (
           <p className="text-sm text-destructive text-center">
