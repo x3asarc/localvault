@@ -2,18 +2,18 @@ import { z } from "zod";
 
 const publicSchema = z.object({
   VITE_APP_ID: z.string().default("local"),
-  VITE_BASE_URL: z.string().url().default("http://localhost:3000"),
-  VITE_ROOT_URL: z.string().url().default("http://localhost:3000"),
+  VITE_BASE_URL: z.string().url().default("http://localhost:47291"),
+  VITE_ROOT_URL: z.string().url().default("http://localhost:47291"),
   VITE_REALTIME_DOMAIN: z.string().default("localhost"),
   VITE_BOX_ID: z.string().default("local"),
   VITE_NODE_ENV: z.enum(["development", "production"]).default("development"),
 });
 
 const serverSchema = z.object({
-  PORT: z.string().default("3000"),
+  PORT: z.string().default("47291"),
   API_KEY: z.string().default("local-dev-key"),
   DB_FILE_NAME: z.string().default("file:./localvault.db"),
-  GUEST_SERVICES_URL: z.string().url().default("http://localhost:3000"),
+  GUEST_SERVICES_URL: z.string().url().default("http://localhost:47291"),
   QUEUE_DB_FILE_NAME: z.string().default("./localvault-queue.db"),
   ERRORS_DB_FILE_NAME: z.string().default("./localvault-errors.db"),
 });
