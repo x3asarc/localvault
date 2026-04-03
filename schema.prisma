@@ -16,5 +16,85 @@ model User {
   image  String?
   handle String?
 
-  // Additional columns can be added here
+  articles  Article[]
+  queries   SavedQuery[]
+  concepts  Concept[]
+}
+
+model Article {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  title       String
+  url         String?
+  content     String   // raw text content
+  sourceType  String   @default("text") // "url", "text", "twitter", "podcast", "note"
+
+  // AI-generated fields
+  summary     String?
+  keyPoints   String?  // JSON array of key points
+  topics      String?  // JSON array of topic strings
+  aiStatus    String   @default("pending") // "pending", "processing", "done", "failed"
+  aiJobId     Int?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articleTags   ArticleTag[]
+  connections   ArticleConnection[] @relation("sourceArticle")
+  connectedFrom ArticleConnection[] @relation("targetArticle")
+}
+
+model Tag {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  articles  ArticleTag[]
+}
+
+model ArticleTag {
+  articleId String
+  tagId     String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+}
+
+model ArticleConnection {
+  id              String  @id @default(cuid())
+  sourceArticleId String
+  targetArticleId String
+  reason          String  // AI-generated explanation of the connection
+  strength        Float   @default(0.5) // 0-1
+
+  sourceArticle   Article @relation("sourceArticle", fields: [sourceArticleId], references: [id], onDelete: Cascade)
+  targetArticle   Article @relation("targetArticle", fields: [targetArticleId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceArticleId, targetArticleId])
+}
+
+model Concept {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  name        String
+  description String
+  articleIds  String   // JSON array of article IDs
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, name])
+}
+
+model SavedQuery {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  question  String
+  answer    String
+  sources   String   // JSON array of article IDs used
+  createdAt DateTime @default(now())
 }

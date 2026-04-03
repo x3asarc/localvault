@@ -1,7 +1,7 @@
 {
   "name": "full-stack-app-template",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev:vite": "vite --host 0.0.0.0 2>&1 | tee -a vite-dev.log",
@@ -71,6 +71,7 @@
     "hono": "^4.12.9",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.525.0",
+    "nanoid": "^5.1.7",
     "next-themes": "^0.4.6",
     "nodemon": "^3.1.11",
     "npm-run-all2": "^8.0.4",
@@ -89,9 +90,9 @@
     "zod": "^4.0.5"
   },
   "peerDependencies": {
-    "openai": "~4.42.0",
     "@trpc/client": "^10.11.0",
-    "@trpc/server": "^10.11.0"
+    "@trpc/server": "^10.11.0",
+    "openai": "~4.42.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

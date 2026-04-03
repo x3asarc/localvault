@@ -1,60 +1,108 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
-import { env } from "@/lib/env";
+import { Library } from "@/components/Library";
+import { AddContent } from "@/components/AddContent";
+import { QueryInterface } from "@/components/QueryInterface";
+import { ConceptsView } from "@/components/ConceptsView";
+import { BookOpen, Plus, Search, Layers } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const banner = [
-  "             __            __  _",
-  "  ____ _____/ /___ _____  / /_(_)   _____",
-  " / __ `/ __  / __ `/ __ \\/ __/ / | / / _ \\",
-  "/ /_/ / /_/ / /_/ / /_/ / /_/ /| |/ /  __/",
-  "\\__,_/\\__,_/\\__,_/ .___/\\__/_/ |___/\\___/",
-  "                /_/",
-].join("\n");
-console.log(
-  `%c${banner}\n\n© ${new Date().getFullYear()} Adaptive Computer, Inc.\nEnv: ${env.VITE_NODE_ENV}`,
-  "font-family: monospace; color: #4ade80;",
-);
+type Tab = "library" | "add" | "query" | "concepts";
 
 function App() {
-  const healthQuery = useQuery({
-    queryKey: ["healthCheck"],
-    queryFn: () => client.health(),
+  const [activeTab, setActiveTab] = useState<Tab>("library");
+  const queryClient = useQueryClient();
+
+  const { data: stats } = useQuery({
+    queryKey: ["libraryStats"],
+    queryFn: () => client.getLibraryStats(),
+    refetchInterval: 15000,
   });
 
-  const statusMessage = healthQuery.isPending
-    ? "Checking app status..."
-    : healthQuery.isError
-      ? "The app is up, but the health check failed."
-      : "All systems are running";
-  const statusColor = healthQuery.isPending
-    ? "text-muted-foreground"
-    : healthQuery.isError
-      ? "text-red-500"
-      : "text-green-500";
+  const tabs: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
+    {
+      id: "library",
+      label: "Library",
+      icon: <BookOpen className="w-4 h-4" />,
+      badge: stats?.totalArticles,
+    },
+    {
+      id: "add",
+      label: "Add",
+      icon: <Plus className="w-4 h-4" />,
+    },
+    {
+      id: "query",
+      label: "Ask",
+      icon: <Search className="w-4 h-4" />,
+    },
+    {
+      id: "concepts",
+      label: "Concepts",
+      icon: <Layers className="w-4 h-4" />,
+      badge: stats?.totalConcepts,
+    },
+  ];
 
   return (
-    // Keep the app shell in normal document flow so the platform's root inset padding
-    // protects content from the host top bar and bottom chat area.
-    // Use flow layout or `sticky` for app-level headers, nav, composers, and bottom actions.
-    // The principle is that app chrome should inherit inset-safe spacing automatically;
-    // `fixed` should never be used here because it can bypass that flow and
-    // overlap host UI or safe areas.
-    <main className="flex min-h-screen items-center flex-col justify-center p-8 gap-16">
-      <Card className="w-full max-w-lg">
-        <CardContent className="space-y-3 p-8 text-center">
-          <h1 className="font-semibold tracking-tight">
-            Your agent is working on this app
-          </h1>
+    <main className="flex flex-col min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
+        <div>
+          <h1 className="font-semibold text-lg tracking-tight">Knowledge Base</h1>
+          {stats && (
+            <p className="text-xs text-muted-foreground">
+              {stats.totalArticles} items · {stats.processedArticles} indexed · {stats.totalConcepts} concepts
+            </p>
+          )}
+        </div>
+      </header>
 
-          <p className="text-sm text-muted-foreground">
-            Changes will show up here as your app takes shape.
-          </p>
-        </CardContent>
-      </Card>
-      <p className="text-xs text-muted-foreground font-mono">
-        <span className={statusColor}>•</span> {statusMessage}
-      </p>
+      {/* Content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === "library" && (
+          <Library onArticleProcessed={() => queryClient.invalidateQueries({ queryKey: ["libraryStats"] })} />
+        )}
+        {activeTab === "add" && (
+          <AddContent
+            onAdded={() => {
+              queryClient.invalidateQueries({ queryKey: ["libraryStats"] });
+              setActiveTab("library");
+            }}
+          />
+        )}
+        {activeTab === "query" && <QueryInterface />}
+        {activeTab === "concepts" && <ConceptsView />}
+      </div>
+
+      {/* Bottom Navigation */}
+      <nav className="border-t border-border bg-card">
+        <div className="flex">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex-1 flex flex-col items-center gap-1 py-3 px-2 text-xs font-medium transition-colors",
+                activeTab === tab.id
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <div className="relative">
+                {tab.icon}
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 bg-primary text-primary-foreground rounded-full text-[9px] font-bold px-1 min-w-[14px] text-center">
+                    {tab.badge > 99 ? "99+" : tab.badge}
+                  </span>
+                )}
+              </div>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </nav>
     </main>
   );
 }
