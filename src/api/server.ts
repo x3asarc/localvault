@@ -45,11 +45,18 @@ if (honoMiddleware) {
   // Adaptive platform: full middleware (auth, queue status, logger, RPC)
   app.use(honoMiddleware({ procedures, jobs, transcoder }));
 } else {
-  // Local mode: minimal JSON-RPC handler via typed-rpc
+  // Local mode: bridge apiClient's /api/<methodName> calls to typed-rpc handleRpc.
+  // apiClient POSTs to /api/<methodName> with params as the JSON body.
+  // handleRpc expects JSON-RPC format: { method, params, id, jsonrpc }.
   const { handleRpc } = await import("typed-rpc/server");
-  app.post("/api/*", async (c) => {
-    const body = await c.req.json();
-    const result = await handleRpc(body, procedures, { transcoder });
+  app.post("/api/:method", async (c) => {
+    const method = c.req.param("method");
+    const params = await c.req.json().catch(() => undefined);
+    const rpcRequest = { jsonrpc: "2.0", method, params, id: 1 };
+    const result = await handleRpc(rpcRequest, procedures, { transcoder });
+    // apiClient expects the result directly (unwrapped from JSON-RPC envelope)
+    if ("result" in result) return c.json(result.result);
+    if ("error" in result) return c.json({ error: result.error }, 500);
     return c.json(result);
   });
 }
