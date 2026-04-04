@@ -5,8 +5,13 @@ import { config } from "dotenv";
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
 
-// Load .env if it exists (ignore missing — CI/platform may inject vars directly)
-if (existsSync(".env")) config({ path: ".env" });
+// Platform uses .env.development; locally users have .env
+const envFile = existsSync(".env.development")
+  ? ".env.development"
+  : existsSync(".env")
+  ? ".env"
+  : null;
+if (envFile) config({ path: envFile });
 
 // Fallback defaults so Prisma can resolve the DB URL even without a .env
 process.env.DB_FILE_NAME ??= "file:./localvault.db";

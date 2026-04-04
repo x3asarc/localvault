@@ -4,8 +4,8 @@
   "version": "1.18.0",
   "type": "module",
   "scripts": {
-    "dev:vite": "vite --host 0.0.0.0",
-    "dev:api": "tsx watch src/api/server.ts",
+    "dev:vite": "node scripts/with-env.mjs vite --host 0.0.0.0",
+    "dev:api": "node scripts/with-env.mjs tsx watch src/api/server.ts",
     "dev:migrations": "node scripts/migrate.mjs",
     "dev:serve": "npx run-p dev:vite dev:api",
     "dev": "npx run-s dev:migrations dev:serve",
