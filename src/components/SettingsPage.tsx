@@ -15,8 +15,8 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PROVIDER_META, PROVIDER_MODELS, DEFAULT_MODELS } from "@/api/ai";
-import type { AIProvider } from "@/api/ai";
+import { PROVIDER_META, PROVIDER_MODELS, DEFAULT_MODELS } from "@/lib/ai-providers";
+import type { AIProvider } from "@/lib/ai-providers";
 
 const PROVIDERS = Object.entries(PROVIDER_META) as [AIProvider, typeof PROVIDER_META[AIProvider]][];
 

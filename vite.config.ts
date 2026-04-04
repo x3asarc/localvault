@@ -26,6 +26,16 @@ export default ({ mode }: { mode: "development" | "production" }) => {
 
   return defineConfig({
     plugins: [tsconfigPaths(), react(), tailwindcss()],
+    // Prevent server-only packages from being bundled into the frontend
+    optimizeDeps: {
+      exclude: ["@prisma/client", "better-sqlite3", "prisma"],
+    },
+    build: {
+      rollupOptions: {
+        external: (id) =>
+          id.includes("@prisma/") || id === "better-sqlite3",
+      },
+    },
     server: {
       port: Number(env.PORT),
       strictPort: true,
