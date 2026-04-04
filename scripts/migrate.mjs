@@ -16,10 +16,14 @@ if (envFile) config({ path: envFile });
 // Fallback defaults so Prisma can resolve the DB URL even without a .env
 process.env.DB_FILE_NAME ??= "file:./localvault.db";
 
-const result = spawnSync(
-  "npx",
-  ["prisma", "migrate", "dev", "--name", "auto"],
-  { stdio: "inherit", shell: true }
-);
+// On the platform (.env.development exists), use `migrate deploy` which is
+// non-interactive and never prompts to reset the DB.
+// Locally, use `migrate dev` which creates new migration files as needed.
+const isProduction = existsSync(".env.development");
+const migrateArgs = isProduction
+  ? ["prisma", "migrate", "deploy"]
+  : ["prisma", "migrate", "dev", "--name", "auto"];
+
+const result = spawnSync("npx", migrateArgs, { stdio: "inherit", shell: true });
 
 process.exit(result.status ?? 1);
